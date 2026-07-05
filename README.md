@@ -2,6 +2,8 @@
 
 An end-to-end data engineering project that simulates a C2C fashion marketplace pipeline using Azure Data Factory, Azure Databricks, Unity Catalog, PySpark, and Delta Lake. The project moves raw marketplace files through landing zones and Bronze/Silver/Gold layers to create a country-level Gold table for buyer engagement, seller performance, app adoption, and product activity analysis.
 
+![E-Commerce Lakehouse Pipeline](assets/ecommerce-lakehouse-pipeline.png)
+
 ## Project At A Glance
 
 | Area | Details |
@@ -14,6 +16,15 @@ An end-to-end data engineering project that simulates a C2C fashion marketplace 
 | Source Entities | Users, buyers, sellers, countries |
 | Final Output | `ecom_db_bharath.gold.ecom_one_big_table` |
 | Analysis Focus | Country-level marketplace activity, buyer engagement, seller performance, user behavior |
+
+## End-To-End Flow
+
+1. Raw C2C marketplace files land in `data/landing-zone-1/`.
+2. ADF reads Landing Zone 1, standardizes file names and folders, and writes one raw file per entity into `data/landing-zone-2/`.
+3. Databricks reads Landing Zone 2 through a Unity Catalog external volume.
+4. The Bronze notebook writes raw managed Delta tables.
+5. The Silver notebook cleans, casts, deduplicates, and enriches each table.
+6. The Gold notebook aggregates users to country level and joins all entities into `ecom_db_bharath.gold.ecom_one_big_table`.
 
 ## Business Objective
 
