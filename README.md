@@ -10,11 +10,12 @@ This personal portfolio project simulates a C2C fashion marketplace analytics pi
 Raw C2C marketplace CSV exports
         |
         v
-Azure Data Factory
-        |
-        v
 data/landing-zone-1/
 Original source files and chunked user batches
+        |
+        v
+Azure Data Factory copy activity
+Reads Landing Zone 1, standardizes file names/folders, writes Landing Zone 2
         |
         v
 data/landing-zone-2/
@@ -53,9 +54,9 @@ BI tool / Databricks SQL
 
 ### 1. ADF Landing Zones
 
-`data/landing-zone-1/` represents the raw source files as received. The users feed arrives as ten incremental chunks, not one file. The first five user chunks have 24 columns and include app/login fields: `hasAnyApp`, `hasAndroidApp`, `hasIosApp`, and `daysSinceLastLogin`. The last five user chunks have 21 columns, omit those four fields, and include `websiteLongevity` instead. This schema drift is why the pipeline separates raw landing from the standardized Databricks ingestion layer.
+`data/landing-zone-1/` represents the raw source files as received before ADF standardization. The users feed arrives as ten incremental chunks, not one file. The first five user chunks have 24 columns and include app/login fields: `hasAnyApp`, `hasAndroidApp`, `hasIosApp`, and `daysSinceLastLogin`. The last five user chunks have 21 columns, omit those four fields, and include `websiteLongevity` instead. This schema drift is why the pipeline separates raw landing from the standardized Databricks ingestion layer.
 
-`data/landing-zone-2/` represents the standardized output of the ADF copy flow. It contains one consistently named file per entity: users, buyers, sellers, and countries. The Databricks Bronze notebook is written to read these entity folders from the Unity Catalog external volume path `/Volumes/ecom_db_bharath/raw/raw_files`.
+ADF sits between the two landing zones. It reads the raw files from Landing Zone 1, standardizes the batches into consistent entity folders, and writes the output to Landing Zone 2. `data/landing-zone-2/` contains one consistently named file per entity: users, buyers, sellers, and countries. The Databricks Bronze notebook is written to read these entity folders from the Unity Catalog external volume path `/Volumes/ecom_db_bharath/raw/raw_files`.
 
 ### 2. Bronze Layer
 
@@ -230,11 +231,12 @@ Prerequisites:
 
 Execution order:
 
-1. Use ADF to move raw source files into Landing Zone 1 and produce one standardized folder per entity in Landing Zone 2.
-2. Run `notebooks/01_Bronze_Layer_Unity_Catalog.py` to create Unity Catalog objects, read Landing Zone 2 files, and write Bronze Delta tables.
-3. Run `notebooks/02_Silver_Layer_Unity_Catalog.py` to clean, cast, standardize, deduplicate, derive fields, and write Silver Delta tables.
-4. Run `notebooks/03_Gold_Layer_Unity_Catalog.py` to aggregate users to country level, outer-join all Silver tables, fill numeric nulls, validate row counts, and write the Gold table.
-5. Query `ecom_db_bharath.gold.ecom_one_big_table` from Databricks SQL or connect a BI tool to it.
+1. Land the raw source files in Landing Zone 1.
+2. Use ADF to read Landing Zone 1, standardize the files, and produce one standardized folder per entity in Landing Zone 2.
+3. Run `notebooks/01_Bronze_Layer_Unity_Catalog.py` to create Unity Catalog objects, read Landing Zone 2 files, and write Bronze Delta tables.
+4. Run `notebooks/02_Silver_Layer_Unity_Catalog.py` to clean, cast, standardize, deduplicate, derive fields, and write Silver Delta tables.
+5. Run `notebooks/03_Gold_Layer_Unity_Catalog.py` to aggregate users to country level, outer-join all Silver tables, fill numeric nulls, validate row counts, and write the Gold table.
+6. Query `ecom_db_bharath.gold.ecom_one_big_table` from Databricks SQL or connect a BI tool to it.
 
 ## Repository Structure
 
