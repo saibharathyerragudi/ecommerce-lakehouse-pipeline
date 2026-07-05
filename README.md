@@ -1,156 +1,268 @@
-# E-Commerce Lakehouse Pipeline
+# ecom-data-pipeline
 
-End-to-end data engineering project that takes raw marketplace files through Azure Data Factory landing zones, Azure Databricks, Unity Catalog, and Delta Lake medallion layers. The final output is a country-level Gold table designed for SQL analytics and dashboard-ready reporting.
+This personal portfolio project simulates a C2C fashion marketplace analytics pipeline built with Azure Data Factory and Azure Databricks using Unity Catalog and a Bronze/Silver/Gold medallion architecture. The pipeline answers a country-level marketplace question: which markets show stronger buyer engagement, seller performance, app adoption, and product activity after raw user, buyer, seller, and country files are standardized and modeled into one Gold reporting table.
 
-## What This Project Builds
-
-- Raw ecommerce data is organized into two ADLS-style landing zones.
-- Azure Data Factory standardizes source files into consistent raw folders.
-- Databricks reads the landed files through a Unity Catalog external volume.
-- Bronze Delta tables preserve the raw entity structure.
-- Silver Delta tables clean, type-cast, standardize, enrich, and deduplicate data.
-- Gold combines user, buyer, seller, and country metrics into one analytics-serving table.
+![E-Commerce Lakehouse Pipeline Architecture](assets/ecommerce-lakehouse-architecture.png)
 
 ## Architecture
 
 ```text
-Source CSV files
-      |
-      v
-landing-zone-1
-Raw source files with original names and chunked user batches
-      |
-      v
-Azure Data Factory copy flow
-Standardizes file names and entity-level folders
-      |
-      v
-landing-zone-2
-users-raw-2, buyers-raw-2, sellers-raw-2, countries-raw-2
-      |
-      v
-Unity Catalog external volume
+Raw C2C marketplace CSV exports
+        |
+        v
+Azure Data Factory
+        |
+        v
+data/landing-zone-1/
+Original source files and chunked user batches
+        |
+        v
+data/landing-zone-2/
+One standardized raw file per entity
+        |
+        v
+Databricks Unity Catalog external volume
 ecom_db_bharath.raw.raw_files
-      |
-      v
-Databricks + Delta Lake
-Bronze -> Silver -> Gold
-      |
-      v
-Gold serving table
+        |
+        v
+Bronze Delta tables
+ecom_db_bharath.bronze.users
+ecom_db_bharath.bronze.buyers
+ecom_db_bharath.bronze.sellers
+ecom_db_bharath.bronze.countries
+        |
+        v
+Silver Delta tables
+cleaned, casted, standardized, deduplicated, and enriched
+        |
+        v
+Gold Delta table
 ecom_db_bharath.gold.ecom_one_big_table
+        |
+        v
+BI tool / Databricks SQL
 ```
 
-## Data Sources
+## Why Unity Catalog Instead Of DBFS Mounts / Hive Metastore
 
-| Entity | Grain | Role in pipeline |
-| --- | --- | --- |
-| `users` | One row per user | User demographics, account history, app usage, product activity |
-| `buyers` | One row per country | Country-level buyer totals, gender mix, wishlist and purchase behavior |
-| `sellers` | One row per country and gender | Seller count, seller performance, product listing and sold metrics |
-| `countries` | One row per country | Country-level marketplace activity and top-seller indicators |
+- Storage access is governed through a Unity Catalog external volume (`ecom_db_bharath.raw.raw_files`) instead of notebook-level DBFS mount paths.
+- Tables are addressed with three-part names such as `ecom_db_bharath.bronze.users`, which makes the Bronze, Silver, and Gold layers easier to discover and manage.
+- Managed Delta tables are written with `saveAsTable()`, so downstream notebooks read table names rather than hard-coded storage folders.
 
-## Landing Zones
+## Pipeline Stages
 
-```text
-data/
-├── landing-zone-1/
-│   ├── users-chunks/
-│   │   ├── chunk1.csv ... chunk10.csv
-│   ├── Buyers-repartition-by-country.csv
-│   ├── Comparison-of-Sellers-by-Gender-and-Country.csv
-│   └── Countries-with-Top-Sellers-(Fashion-C2C).csv
-└── landing-zone-2/
-    ├── users-raw-2/users-raw.csv
-    ├── buyers-raw-2/buyers-raw.csv
-    ├── sellers-raw-2/sellers-raw.csv
-    └── countries-raw-2/countries-raw.csv
-```
+### 1. ADF Landing Zones
 
-`landing-zone-1` represents the as-received source files. The users feed arrives in ten chunks, which models a common batch-ingestion pattern where a source system exports data in partitions instead of one clean file.
+`data/landing-zone-1/` represents the raw source files as received. The users feed arrives as ten incremental chunks, not one file. The first five user chunks have 24 columns and include app/login fields: `hasAnyApp`, `hasAndroidApp`, `hasIosApp`, and `daysSinceLastLogin`. The last five user chunks have 21 columns, omit those four fields, and include `websiteLongevity` instead. This schema drift is why the pipeline separates raw landing from the standardized Databricks ingestion layer.
 
-`landing-zone-2` represents the standardized output consumed by Databricks. In the deployed workflow, the folders are read from ADLS Gen2 through a Unity Catalog external volume.
+`data/landing-zone-2/` represents the standardized output of the ADF copy flow. It contains one consistently named file per entity: users, buyers, sellers, and countries. The Databricks Bronze notebook is written to read these entity folders from the Unity Catalog external volume path `/Volumes/ecom_db_bharath/raw/raw_files`.
 
-## Notebooks
+### 2. Bronze Layer
 
-Run the notebooks in this order:
+Notebook: `notebooks/01_Bronze_Layer_Unity_Catalog.py`
 
-1. `notebooks/01_Bronze_Layer_Unity_Catalog.py`
-2. `notebooks/02_Silver_Layer_Unity_Catalog.py`
-3. `notebooks/03_Gold_Layer_Unity_Catalog.py`
-
-## Bronze Layer
-
-The Bronze notebook creates Unity Catalog objects and writes raw landed files into managed Delta tables:
+The Bronze notebook creates the catalog and schemas `raw`, `bronze`, `silver`, and `gold` under `ecom_db_bharath`. It creates the external volume `ecom_db_bharath.raw.raw_files` at `abfss://landing-zone-2@ecomadlsbharath.dfs.core.windows.net/raw_files/`, lists the raw volume, reads four parquet folders (`users-raw-2`, `buyers-raw-2`, `sellers-raw-2`, `countries-raw-2`), and writes them as managed Delta tables:
 
 - `ecom_db_bharath.bronze.users`
 - `ecom_db_bharath.bronze.buyers`
 - `ecom_db_bharath.bronze.sellers`
 - `ecom_db_bharath.bronze.countries`
 
-Bronze keeps the data close to its landed structure so the raw-to-curated lineage is easy to audit.
+The Bronze notebook does not apply business transformations. It validates that the tables exist with `SHOW TABLES`, previews `bronze.users`, and runs row-count checks for all four Bronze tables.
 
-## Silver Layer
+### 3. Silver Layer
 
-The Silver notebook prepares each entity for analytics:
+Notebook: `notebooks/02_Silver_Layer_Unity_Catalog.py`
 
-- Normalizes country and text fields.
-- Casts numeric, boolean, and date-like fields into usable types.
-- Deduplicates user and country-level records.
-- Handles nulls in count and ratio columns.
-- Adds derived fields such as account age groups, engagement flags, seller size categories, and market performance indicators.
+The Silver notebook reads the four Bronze tables and applies table-specific cleaning, type casting, deduplication, and derived fields.
 
-## Gold Layer
+Users transformations:
 
-The Gold notebook builds `ecom_db_bharath.gold.ecom_one_big_table`.
+- Normalizes `countryCode` with `upper(trim(countryCode))`.
+- Creates `language_full` from `language`: `en` -> English, `fr` -> French, `de` -> German, `es` -> Spanish, `it` -> Italian, otherwise Other.
+- Standardizes `gender`: values starting with `M` become Male, values starting with `F` become Female, all others become Other.
+- Creates `civilitytitle_clean` by lowercasing `civilityTitle`, replacing `mme|mrs|ms` with `ms`, then applying `initcap`.
+- Casts `daysSinceLastLogin` to integer and fills nulls with `0`.
+- Creates `years_since_last_login` as `round(daysSinceLastLogin / 365, 2)`.
+- Creates `account_age_years` as `round(seniority / 365, 2)`.
+- Creates `account_age_group`: New if `< 1`, Intermediate if `>= 1 and < 3`, otherwise Experienced.
+- Adds `current_year` using `year(current_date())`.
+- Creates `user_descriptor` by concatenating `gender`, `countryCode`, the first three characters of `civilitytitle_clean`, and `language_full`.
+- Creates `flag_long_title` when `length(civilityTitle) > 10`.
+- Casts `hasAnyApp`, `hasAndroidApp`, `hasIosApp`, and `hasProfilePicture` to boolean.
+- Casts `socialNbFollowers`, `socialNbFollows`, `socialProductsLiked`, `productsListed`, `productsSold`, `productsWished`, and `productsBought` to integer.
+- Casts `productsPassRate`, `seniorityAsMonths`, and `seniorityAsYears` to `DecimalType(10, 2)`.
+- Deduplicates users on `identifierHash`.
+- Writes `ecom_db_bharath.silver.users`.
 
-Key design choices:
+Buyers transformations:
 
-- Aggregates user-level data to country grain before joining.
-- Outer joins country-level users, buyers, sellers, and country market metrics.
-- Uses explicit source-prefixed column names such as `Users_TotalUsers`, `Buyers_Total`, and `Sellers_Total`.
-- Fills numeric nulls introduced by outer joins.
-- Compares Gold row count against source country counts to catch unexpected row loss or join fan-out.
+- Casts count columns to integer: `buyers`, `topbuyers`, `femalebuyers`, `malebuyers`, `topfemalebuyers`, `topmalebuyers`, `totalproductsbought`, `totalproductswished`, `totalproductsliked`, `toptotalproductsbought`, `toptotalproductswished`, and `toptotalproductsliked`.
+- Casts ratio/mean columns to `DecimalType(10, 2)`: `topbuyerratio`, `femalebuyersratio`, `topfemalebuyersratio`, `boughtperwishlistratio`, `boughtperlikeratio`, `topboughtperwishlistratio`, `topboughtperlikeratio`, `meanproductsbought`, `meanproductswished`, `meanproductsliked`, `topmeanproductsbought`, `topmeanproductswished`, `topmeanproductsliked`, `meanofflinedays`, `topmeanofflinedays`, `meanfollowers`, `meanfollowing`, `topmeanfollowers`, and `topmeanfollowing`.
+- Standardizes `country` with `initcap(country)`.
+- Fills nulls in integer count columns with `0`.
+- Creates `female_to_male_ratio` as `round(femalebuyers / (malebuyers + 1), 2)`.
+- Creates `wishlist_to_purchase_ratio` as `round(totalproductswished / (totalproductsbought + 1), 2)`.
+- Creates `high_engagement` when `boughtperwishlistratio > 0.5`.
+- Creates `growing_female_market` when `femalebuyersratio > topfemalebuyersratio`.
+- Deduplicates on `country`.
+- Writes `ecom_db_bharath.silver.buyers`.
 
-## How To Run
+Sellers transformations:
+
+- Casts `nbsellers`, `totalproductssold`, `totalproductslisted`, `totalbought`, `totalwished`, and `totalproductsliked` to integer.
+- Casts `meanproductssold`, `meanproductslisted`, `meansellerpassrate`, `meanproductsbought`, `meanproductswished`, `meanproductsliked`, `meanfollowers`, `meanfollows`, `percentofappusers`, `percentofiosusers`, and `meanseniority` to `DecimalType(10, 2)`.
+- Standardizes `country` with `initcap(country)`.
+- Standardizes `sex` with `upper(sex)`.
+- Creates `seller_size_category`: Small when `nbsellers < 500`, Medium when `500 <= nbsellers < 2000`, otherwise Large.
+- Creates `mean_products_listed_per_seller` as `round(totalproductslisted / nbsellers, 2)`.
+- Creates `high_seller_pass_rate`: High when `meansellerpassrate > 0.75`, otherwise Normal.
+- Replaces null `meansellerpassrate` values with the overall average seller pass rate.
+- Writes `ecom_db_bharath.silver.sellers`.
+
+Countries transformations:
+
+- Casts seller count/product count columns to integer: `sellers`, `topsellers`, `femalesellers`, `malesellers`, `topfemalesellers`, `topmalesellers`, `toptotalproductssold`, `totalproductssold`, `toptotalproductslisted`, and `totalproductslisted`.
+- Casts ratio/mean columns to `DecimalType(10, 2)`: `topsellerratio`, `femalesellersratio`, `topfemalesellersratio`, `countrysoldratio`, `bestsoldratio`, `topmeanproductssold`, `topmeanproductslisted`, `meanproductssold`, `meanproductslisted`, `meanofflinedays`, `topmeanofflinedays`, `meanfollowers`, `meanfollowing`, `topmeanfollowers`, and `topmeanfollowing`.
+- Standardizes `country` with `initcap(country)`.
+- Creates `top_seller_ratio` as `round(topsellers / sellers, 2)`.
+- Creates `high_female_seller_ratio` when `femalesellersratio > 0.5`.
+- Creates `performance_indicator` as `round(toptotalproductssold / (toptotalproductslisted + 1), 2)`.
+- Creates `high_performance` when `performance_indicator > 0.8`.
+- Creates `activity_level`: Highly Active when `meanofflinedays < 30`, Moderately Active when `30 <= meanofflinedays < 60`, otherwise Low Activity.
+- Writes `ecom_db_bharath.silver.countries`.
+
+The Silver notebook ends by checking row counts for `users`, `buyers`, `sellers`, and `countries` in the Silver schema.
+
+### 4. Gold Layer
+
+Notebook: `notebooks/03_Gold_Layer_Unity_Catalog.py`
+
+The Gold notebook reads the four Silver tables and produces `ecom_db_bharath.gold.ecom_one_big_table`. Because `silver.users` is user-level while the other three tables are already country-level, it first aggregates users by `country` into:
+
+- `Users_TotalUsers`
+- `Users_TotalProductsSold`
+- `Users_TotalProductsWished`
+- `Users_TotalProductsBought`
+- `Users_TotalProductsListed`
+- `Users_AvgProductsPassRate`
+- `Users_AvgAccountAgeYears`
+- `Users_AvgSocialFollowers`
+- `Users_AvgSocialFollows`
+- `Users_PctWithAnyApp`
+- `Users_PctFemale`
+- `Users_LongTitleFlagCount`
+
+It then outer-joins `users_by_country`, `silver_countries`, `silver_buyers`, and `silver_sellers` on `country`. The outer join keeps countries that appear in any source table instead of silently dropping partial markets.
+
+The final Gold select aliases fields with source prefixes:
+
+- Country key: `Country`
+- User metrics: `Users_*`
+- Country seller-market metrics: `Countries_*`
+- Buyer metrics: `Buyers_*`
+- Seller metrics: `Sellers_*`
+
+After the join, the notebook identifies numeric columns and fills numeric nulls with `0`, so downstream aggregations do not drop rows because one source was missing for a country. It prints the Gold row count and distinct country counts from users, countries, buyers, and sellers to check for join fan-out or row loss. It then writes the Gold table with `saveAsTable()` and validates it with a sample ordered query plus a final row count.
+
+## Data
+
+Actual `data/` tree:
+
+```text
+data/landing-zone-1/Buyers-repartition-by-country.csv
+data/landing-zone-1/Comparison-of-Sellers-by-Gender-and-Country.csv
+data/landing-zone-1/Countries-with-Top-Sellers-(Fashion-C2C).csv
+data/landing-zone-1/users-chunks/chunk1.csv
+data/landing-zone-1/users-chunks/chunk10.csv
+data/landing-zone-1/users-chunks/chunk2.csv
+data/landing-zone-1/users-chunks/chunk3.csv
+data/landing-zone-1/users-chunks/chunk4.csv
+data/landing-zone-1/users-chunks/chunk5.csv
+data/landing-zone-1/users-chunks/chunk6.csv
+data/landing-zone-1/users-chunks/chunk7.csv
+data/landing-zone-1/users-chunks/chunk8.csv
+data/landing-zone-1/users-chunks/chunk9.csv
+data/landing-zone-2/buyers-raw-2/buyers-raw.csv
+data/landing-zone-2/countries-raw-2/countries-raw.csv
+data/landing-zone-2/sellers-raw-2/sellers-raw.csv
+data/landing-zone-2/users-raw-2/users-raw.csv
+```
+
+Verified file counts:
+
+| Path | Rows | Columns | Meaning |
+| --- | ---: | ---: | --- |
+| `data/landing-zone-1/Buyers-repartition-by-country.csv` | 62 | 32 | Raw buyer aggregate file by country |
+| `data/landing-zone-1/Comparison-of-Sellers-by-Gender-and-Country.csv` | 73 | 19 | Raw seller aggregate file by country and gender |
+| `data/landing-zone-1/Countries-with-Top-Sellers-(Fashion-C2C).csv` | 19 | 26 | Raw country seller-market summary |
+| `data/landing-zone-1/users-chunks/chunk1.csv` | 19,783 | 24 | Raw users batch, schema group 1 |
+| `data/landing-zone-1/users-chunks/chunk2.csv` | 19,783 | 24 | Raw users batch, schema group 1 |
+| `data/landing-zone-1/users-chunks/chunk3.csv` | 19,783 | 24 | Raw users batch, schema group 1 |
+| `data/landing-zone-1/users-chunks/chunk4.csv` | 19,783 | 24 | Raw users batch, schema group 1 |
+| `data/landing-zone-1/users-chunks/chunk5.csv` | 19,781 | 24 | Raw users batch, schema group 1 |
+| `data/landing-zone-1/users-chunks/chunk6.csv` | 4,149 | 21 | Raw users batch, schema group 2 |
+| `data/landing-zone-1/users-chunks/chunk7.csv` | 4,149 | 21 | Raw users batch, schema group 2 |
+| `data/landing-zone-1/users-chunks/chunk8.csv` | 4,149 | 21 | Raw users batch, schema group 2 |
+| `data/landing-zone-1/users-chunks/chunk9.csv` | 4,149 | 21 | Raw users batch, schema group 2 |
+| `data/landing-zone-1/users-chunks/chunk10.csv` | 4,147 | 21 | Raw users batch, schema group 2 |
+| `data/landing-zone-2/users-raw-2/users-raw.csv` | 98,913 | 24 | Standardized users file |
+| `data/landing-zone-2/buyers-raw-2/buyers-raw.csv` | 62 | 32 | Standardized buyers file |
+| `data/landing-zone-2/sellers-raw-2/sellers-raw.csv` | 73 | 19 | Standardized sellers file |
+| `data/landing-zone-2/countries-raw-2/countries-raw.csv` | 19 | 26 | Standardized countries file |
+
+User chunk schema drift:
+
+- Schema group 1: `chunk1.csv` through `chunk5.csv` have 24 columns: `identifierHash`, `type`, `country`, `language`, `socialNbFollowers`, `socialNbFollows`, `socialProductsLiked`, `productsListed`, `productsSold`, `productsPassRate`, `productsWished`, `productsBought`, `gender`, `civilityGenderId`, `civilityTitle`, `hasAnyApp`, `hasAndroidApp`, `hasIosApp`, `hasProfilePicture`, `daysSinceLastLogin`, `seniority`, `seniorityAsMonths`, `seniorityAsYears`, `countryCode`.
+- Schema group 2: `chunk6.csv` through `chunk10.csv` have 21 columns: `identifierHash`, `type`, `countryCode`, `country`, `language`, `socialNbFollowers`, `socialNbFollows`, `socialProductsLiked`, `productsListed`, `productsSold`, `productsPassRate`, `productsWished`, `productsBought`, `gender`, `civilityGenderId`, `civilityTitle`, `hasProfilePicture`, `seniority`, `seniorityAsMonths`, `seniorityAsYears`, `websiteLongevity`.
+- Group 1 contains `hasAnyApp`, `hasAndroidApp`, `hasIosApp`, and `daysSinceLastLogin`; group 2 does not.
+- Group 2 contains `websiteLongevity`; group 1 does not.
+
+## How To Run End To End
 
 Prerequisites:
 
-- Azure Data Factory pipeline that lands source files into ADLS Gen2.
+- Azure Data Factory pipeline or equivalent copy process that lands standardized files in the `landing-zone-2/raw_files/` structure in ADLS Gen2.
 - Azure Databricks workspace with Unity Catalog enabled.
-- Unity Catalog storage credential and external location for the landing-zone storage path.
-- Permission to create catalogs, schemas, volumes, and managed Delta tables.
+- Permission to create the catalog `ecom_db_bharath`, schemas, an external volume, and managed Delta tables.
+- Storage access for the external volume path used in `notebooks/01_Bronze_Layer_Unity_Catalog.py`: `abfss://landing-zone-2@ecomadlsbharath.dfs.core.windows.net/raw_files/`.
+- A Databricks cluster that can run PySpark and Delta Lake workloads.
 
-Databricks run order:
+Execution order:
 
-```text
-01_Bronze_Layer_Unity_Catalog.py
-02_Silver_Layer_Unity_Catalog.py
-03_Gold_Layer_Unity_Catalog.py
-```
-
-The notebooks currently use:
-
-```text
-Catalog: ecom_db_bharath
-Raw volume: ecom_db_bharath.raw.raw_files
-Gold table: ecom_db_bharath.gold.ecom_one_big_table
-```
-
-Update the catalog, volume, and ADLS path values if running in a different workspace.
+1. Use ADF to move raw source files into Landing Zone 1 and produce one standardized folder per entity in Landing Zone 2.
+2. Run `notebooks/01_Bronze_Layer_Unity_Catalog.py` to create Unity Catalog objects, read Landing Zone 2 files, and write Bronze Delta tables.
+3. Run `notebooks/02_Silver_Layer_Unity_Catalog.py` to clean, cast, standardize, deduplicate, derive fields, and write Silver Delta tables.
+4. Run `notebooks/03_Gold_Layer_Unity_Catalog.py` to aggregate users to country level, outer-join all Silver tables, fill numeric nulls, validate row counts, and write the Gold table.
+5. Query `ecom_db_bharath.gold.ecom_one_big_table` from Databricks SQL or connect a BI tool to it.
 
 ## Repository Structure
 
+Actual repository file tree:
+
 ```text
-ecommerce-lakehouse-pipeline/
-├── README.md
-├── notebooks/
-│   ├── 01_Bronze_Layer_Unity_Catalog.py
-│   ├── 02_Silver_Layer_Unity_Catalog.py
-│   └── 03_Gold_Layer_Unity_Catalog.py
-└── data/
-    ├── landing-zone-1/
-    └── landing-zone-2/
+./.gitignore
+./README.md
+./data/landing-zone-1/Buyers-repartition-by-country.csv
+./data/landing-zone-1/Comparison-of-Sellers-by-Gender-and-Country.csv
+./data/landing-zone-1/Countries-with-Top-Sellers-(Fashion-C2C).csv
+./data/landing-zone-1/users-chunks/chunk1.csv
+./data/landing-zone-1/users-chunks/chunk10.csv
+./data/landing-zone-1/users-chunks/chunk2.csv
+./data/landing-zone-1/users-chunks/chunk3.csv
+./data/landing-zone-1/users-chunks/chunk4.csv
+./data/landing-zone-1/users-chunks/chunk5.csv
+./data/landing-zone-1/users-chunks/chunk6.csv
+./data/landing-zone-1/users-chunks/chunk7.csv
+./data/landing-zone-1/users-chunks/chunk8.csv
+./data/landing-zone-1/users-chunks/chunk9.csv
+./data/landing-zone-2/buyers-raw-2/buyers-raw.csv
+./data/landing-zone-2/countries-raw-2/countries-raw.csv
+./data/landing-zone-2/sellers-raw-2/sellers-raw.csv
+./data/landing-zone-2/users-raw-2/users-raw.csv
+./notebooks/01_Bronze_Layer_Unity_Catalog.py
+./notebooks/02_Silver_Layer_Unity_Catalog.py
+./notebooks/03_Gold_Layer_Unity_Catalog.py
 ```
 
 ## Tech Stack
@@ -161,8 +273,4 @@ ecommerce-lakehouse-pipeline/
 - Unity Catalog
 - PySpark
 - Delta Lake
-- Databricks SQL
-
-## Project Outcome
-
-This project demonstrates a lakehouse pipeline pattern for moving messy marketplace files into governed, queryable Delta tables. The final Gold table supports country-level analysis of marketplace participation, buyer engagement, seller performance, app adoption, and product activity.
+- Databricks SQL / BI tool serving layer
