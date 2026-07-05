@@ -12,15 +12,15 @@ An end-to-end data engineering project that simulates a C2C fashion marketplace 
 | Pipeline Type | Batch data engineering pipeline |
 | Cloud Stack | Azure Data Factory, ADLS Gen2, Azure Databricks |
 | Lakehouse Stack | Unity Catalog, PySpark, Delta Lake |
-| Data Layers | Landing Zone 1, Landing Zone 2, Bronze, Silver, Gold |
+| Data Layers | ADLS Landing Zone 1, ADLS Landing Zone 2, Bronze, Silver, Gold |
 | Source Entities | Users, buyers, sellers, countries |
 | Final Output | `ecom_db_bharath.gold.ecom_one_big_table` |
 | Analysis Focus | Country-level marketplace activity, buyer engagement, seller performance, user behavior |
 
 ## End-To-End Flow
 
-1. Raw C2C marketplace files land in `data/landing-zone-1/`.
-2. ADF reads Landing Zone 1, standardizes file names and folders, and writes one raw file per entity into `data/landing-zone-2/`.
+1. Raw C2C marketplace files land in Landing Zone 1 in ADLS Gen2.
+2. ADF reads Landing Zone 1, standardizes file names and folders, and writes one raw file per entity into Landing Zone 2 in ADLS Gen2.
 3. Databricks reads Landing Zone 2 through a Unity Catalog external volume.
 4. The Bronze notebook writes raw managed Delta tables.
 5. The Silver notebook cleans, casts, deduplicates, and enriches each table.
@@ -41,7 +41,7 @@ The pipeline answers:
 
 ### Landing Zone 1
 
-`data/landing-zone-1/` stores raw files as received from the source system.
+Landing Zone 1 is created in ADLS Gen2 and stores raw files as received from the source system. In this repository, `data/landing-zone-1/` mirrors that ADLS landing-zone content for review.
 
 The users data arrives as multiple batches under:
 
@@ -58,11 +58,11 @@ This makes Landing Zone 1 the raw intake layer where file inconsistencies are pr
 
 ### Azure Data Factory Standardization
 
-ADF sits between Landing Zone 1 and Landing Zone 2. It reads the raw files from Landing Zone 1, standardizes the files into consistent entity folders, and writes one clean raw file per entity into Landing Zone 2.
+ADF sits between the two ADLS landing zones. It reads the raw files from Landing Zone 1, standardizes the files into consistent entity folders, and writes one clean raw file per entity into Landing Zone 2.
 
 ### Landing Zone 2
 
-`data/landing-zone-2/` contains the standardized files used by Databricks:
+Landing Zone 2 is also created in ADLS Gen2 and contains the standardized files used by Databricks. In this repository, `data/landing-zone-2/` mirrors those standardized ADLS folders:
 
 - `users-raw-2/users-raw.csv`
 - `buyers-raw-2/buyers-raw.csv`
@@ -77,7 +77,7 @@ Notebook:
 notebooks/01_Bronze_Layer_Unity_Catalog.py
 ```
 
-The Bronze notebook creates the Unity Catalog catalog, schemas, and external volume, then reads the Landing Zone 2 folders and writes raw managed Delta tables:
+The Bronze notebook creates the Unity Catalog catalog, schemas, and external volume, then reads the Landing Zone 2 folders from ADLS Gen2 and writes raw managed Delta tables:
 
 - `ecom_db_bharath.bronze.users`
 - `ecom_db_bharath.bronze.buyers`
@@ -207,12 +207,13 @@ ecommerce-lakehouse-pipeline/
 
 ## How To Use
 
-1. Upload or connect the Landing Zone 2 files to the ADLS Gen2 path used by the Unity Catalog external volume.
-2. Open the notebooks in Azure Databricks.
-3. Run `01_Bronze_Layer_Unity_Catalog.py`.
-4. Run `02_Silver_Layer_Unity_Catalog.py`.
-5. Run `03_Gold_Layer_Unity_Catalog.py`.
-6. Query `ecom_db_bharath.gold.ecom_one_big_table` from Databricks SQL or connect it to a BI tool.
+1. Create or use the ADLS Gen2 Landing Zone 1 and Landing Zone 2 paths.
+2. Use ADF to copy and standardize files from Landing Zone 1 into Landing Zone 2.
+3. Open the notebooks in Azure Databricks.
+4. Run `01_Bronze_Layer_Unity_Catalog.py`.
+5. Run `02_Silver_Layer_Unity_Catalog.py`.
+6. Run `03_Gold_Layer_Unity_Catalog.py`.
+7. Query `ecom_db_bharath.gold.ecom_one_big_table` from Databricks SQL or connect it to a BI tool.
 
 ## Tech Stack
 
