@@ -2,48 +2,6 @@
 
 This personal portfolio project simulates a C2C fashion marketplace analytics pipeline built with Azure Data Factory and Azure Databricks using Unity Catalog and a Bronze/Silver/Gold medallion architecture. The pipeline answers a country-level marketplace question: which markets show stronger buyer engagement, seller performance, app adoption, and product activity after raw user, buyer, seller, and country files are standardized and modeled into one Gold reporting table.
 
-![E-Commerce Lakehouse Pipeline Architecture](assets/ecommerce-lakehouse-architecture.png)
-
-## Architecture
-
-```text
-Raw C2C marketplace CSV exports
-        |
-        v
-data/landing-zone-1/
-Original source files and chunked user batches
-        |
-        v
-Azure Data Factory copy activity
-Reads Landing Zone 1, standardizes file names/folders, writes Landing Zone 2
-        |
-        v
-data/landing-zone-2/
-One standardized raw file per entity
-        |
-        v
-Databricks Unity Catalog external volume
-ecom_db_bharath.raw.raw_files
-        |
-        v
-Bronze Delta tables
-ecom_db_bharath.bronze.users
-ecom_db_bharath.bronze.buyers
-ecom_db_bharath.bronze.sellers
-ecom_db_bharath.bronze.countries
-        |
-        v
-Silver Delta tables
-cleaned, casted, standardized, deduplicated, and enriched
-        |
-        v
-Gold Delta table
-ecom_db_bharath.gold.ecom_one_big_table
-        |
-        v
-BI tool / Databricks SQL
-```
-
 ## Why Unity Catalog Instead Of DBFS Mounts / Hive Metastore
 
 - Storage access is governed through a Unity Catalog external volume (`ecom_db_bharath.raw.raw_files`) instead of notebook-level DBFS mount paths.
