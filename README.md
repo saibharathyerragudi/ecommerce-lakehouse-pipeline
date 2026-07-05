@@ -39,14 +39,14 @@ The pipeline answers:
 
 ## Pipeline Showcase
 
-### Landing Zone 1
+### ADLS Landing Zone 1
 
-Landing Zone 1 is created in ADLS Gen2 and stores raw files as received from the source system. In this repository, `data/landing-zone-1/` mirrors that ADLS landing-zone content for review.
+Landing Zone 1 is created in ADLS Gen2 and stores raw files as received from the source system. The GitHub repo includes those raw CSV files under `data/raw-source-files/` for review.
 
 The users data arrives as multiple batches under:
 
 ```text
-data/landing-zone-1/users-chunks/
+data/raw-source-files/users-chunks/
 ```
 
 The user batches include schema drift:
@@ -60,14 +60,9 @@ This makes Landing Zone 1 the raw intake layer where file inconsistencies are pr
 
 ADF sits between the two ADLS landing zones. It reads the raw files from Landing Zone 1, standardizes the files into consistent entity folders, and writes one clean raw file per entity into Landing Zone 2.
 
-### Landing Zone 2
+### ADLS Landing Zone 2
 
-Landing Zone 2 is also created in ADLS Gen2 and contains the standardized files used by Databricks. In this repository, `data/landing-zone-2/` mirrors those standardized ADLS folders:
-
-- `users-raw-2/users-raw.csv`
-- `buyers-raw-2/buyers-raw.csv`
-- `sellers-raw-2/sellers-raw.csv`
-- `countries-raw-2/countries-raw.csv`
+Landing Zone 2 is also created in ADLS Gen2 and contains the standardized files used by Databricks.
 
 ### Bronze Layer
 
@@ -135,27 +130,23 @@ ecom_db_bharath.gold.ecom_one_big_table
 
 The notebook also fills numeric nulls created by the outer join and performs row-count checks to validate the final table.
 
-## Data
+## Raw Data In This Repo
 
 | File | Rows | Purpose |
 |---|---:|---|
-| `data/landing-zone-1/Buyers-repartition-by-country.csv` | 62 | Raw buyer metrics by country |
-| `data/landing-zone-1/Comparison-of-Sellers-by-Gender-and-Country.csv` | 73 | Raw seller metrics by country and gender |
-| `data/landing-zone-1/Countries-with-Top-Sellers-(Fashion-C2C).csv` | 19 | Raw seller-market summary by country |
-| `data/landing-zone-1/users-chunks/chunk1.csv` | 19,783 | Raw users batch |
-| `data/landing-zone-1/users-chunks/chunk2.csv` | 19,783 | Raw users batch |
-| `data/landing-zone-1/users-chunks/chunk3.csv` | 19,783 | Raw users batch |
-| `data/landing-zone-1/users-chunks/chunk4.csv` | 19,783 | Raw users batch |
-| `data/landing-zone-1/users-chunks/chunk5.csv` | 19,781 | Raw users batch |
-| `data/landing-zone-1/users-chunks/chunk6.csv` | 4,149 | Raw users batch with schema drift |
-| `data/landing-zone-1/users-chunks/chunk7.csv` | 4,149 | Raw users batch with schema drift |
-| `data/landing-zone-1/users-chunks/chunk8.csv` | 4,149 | Raw users batch with schema drift |
-| `data/landing-zone-1/users-chunks/chunk9.csv` | 4,149 | Raw users batch with schema drift |
-| `data/landing-zone-1/users-chunks/chunk10.csv` | 4,147 | Raw users batch with schema drift |
-| `data/landing-zone-2/users-raw-2/users-raw.csv` | 98,913 | Standardized users file |
-| `data/landing-zone-2/buyers-raw-2/buyers-raw.csv` | 62 | Standardized buyers file |
-| `data/landing-zone-2/sellers-raw-2/sellers-raw.csv` | 73 | Standardized sellers file |
-| `data/landing-zone-2/countries-raw-2/countries-raw.csv` | 19 | Standardized countries file |
+| `data/raw-source-files/Buyers-repartition-by-country.csv` | 62 | Raw buyer metrics by country |
+| `data/raw-source-files/Comparison-of-Sellers-by-Gender-and-Country.csv` | 73 | Raw seller metrics by country and gender |
+| `data/raw-source-files/Countries-with-Top-Sellers-(Fashion-C2C).csv` | 19 | Raw seller-market summary by country |
+| `data/raw-source-files/users-chunks/chunk1.csv` | 19,783 | Raw users batch |
+| `data/raw-source-files/users-chunks/chunk2.csv` | 19,783 | Raw users batch |
+| `data/raw-source-files/users-chunks/chunk3.csv` | 19,783 | Raw users batch |
+| `data/raw-source-files/users-chunks/chunk4.csv` | 19,783 | Raw users batch |
+| `data/raw-source-files/users-chunks/chunk5.csv` | 19,781 | Raw users batch |
+| `data/raw-source-files/users-chunks/chunk6.csv` | 4,149 | Raw users batch with schema drift |
+| `data/raw-source-files/users-chunks/chunk7.csv` | 4,149 | Raw users batch with schema drift |
+| `data/raw-source-files/users-chunks/chunk8.csv` | 4,149 | Raw users batch with schema drift |
+| `data/raw-source-files/users-chunks/chunk9.csv` | 4,149 | Raw users batch with schema drift |
+| `data/raw-source-files/users-chunks/chunk10.csv` | 4,147 | Raw users batch with schema drift |
 
 ## Skills Demonstrated
 
@@ -175,30 +166,21 @@ The notebook also fills numeric nulls created by the outer join and performs row
 ecommerce-lakehouse-pipeline/
 ├── README.md
 ├── data/
-│   ├── landing-zone-1/
-│   │   ├── Buyers-repartition-by-country.csv
-│   │   ├── Comparison-of-Sellers-by-Gender-and-Country.csv
-│   │   ├── Countries-with-Top-Sellers-(Fashion-C2C).csv
-│   │   └── users-chunks/
-│   │       ├── chunk1.csv
-│   │       ├── chunk2.csv
-│   │       ├── chunk3.csv
-│   │       ├── chunk4.csv
-│   │       ├── chunk5.csv
-│   │       ├── chunk6.csv
-│   │       ├── chunk7.csv
-│   │       ├── chunk8.csv
-│   │       ├── chunk9.csv
-│   │       └── chunk10.csv
-│   └── landing-zone-2/
-│       ├── buyers-raw-2/
-│       │   └── buyers-raw.csv
-│       ├── countries-raw-2/
-│       │   └── countries-raw.csv
-│       ├── sellers-raw-2/
-│       │   └── sellers-raw.csv
-│       └── users-raw-2/
-│           └── users-raw.csv
+│   └── raw-source-files/
+│       ├── Buyers-repartition-by-country.csv
+│       ├── Comparison-of-Sellers-by-Gender-and-Country.csv
+│       ├── Countries-with-Top-Sellers-(Fashion-C2C).csv
+│       └── users-chunks/
+│           ├── chunk1.csv
+│           ├── chunk2.csv
+│           ├── chunk3.csv
+│           ├── chunk4.csv
+│           ├── chunk5.csv
+│           ├── chunk6.csv
+│           ├── chunk7.csv
+│           ├── chunk8.csv
+│           ├── chunk9.csv
+│           └── chunk10.csv
 └── notebooks/
     ├── 01_Bronze_Layer_Unity_Catalog.py
     ├── 02_Silver_Layer_Unity_Catalog.py
