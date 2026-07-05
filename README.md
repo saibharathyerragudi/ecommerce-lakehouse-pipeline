@@ -41,12 +41,12 @@ The pipeline answers:
 
 ### ADLS Landing Zone 1
 
-Landing Zone 1 is created in ADLS Gen2 and stores raw files as received from the source system. The GitHub repo includes those raw CSV files under `data/raw-source-files/` for review.
+Landing Zone 1 is created in ADLS Gen2 and stores raw files as received from the source system. The GitHub repo includes the Project 2 raw data folder under `data/` for review.
 
 The users data arrives as multiple batches under:
 
 ```text
-data/raw-source-files/users-chunks/
+data/chunk-data/
 ```
 
 The user batches include schema drift:
@@ -134,19 +134,22 @@ The notebook also fills numeric nulls created by the outer join and performs row
 
 | File | Rows | Purpose |
 |---|---:|---|
-| `data/raw-source-files/Buyers-repartition-by-country.csv` | 62 | Raw buyer metrics by country |
-| `data/raw-source-files/Comparison-of-Sellers-by-Gender-and-Country.csv` | 73 | Raw seller metrics by country and gender |
-| `data/raw-source-files/Countries-with-Top-Sellers-(Fashion-C2C).csv` | 19 | Raw seller-market summary by country |
-| `data/raw-source-files/users-chunks/chunk1.csv` | 19,783 | Raw users batch |
-| `data/raw-source-files/users-chunks/chunk2.csv` | 19,783 | Raw users batch |
-| `data/raw-source-files/users-chunks/chunk3.csv` | 19,783 | Raw users batch |
-| `data/raw-source-files/users-chunks/chunk4.csv` | 19,783 | Raw users batch |
-| `data/raw-source-files/users-chunks/chunk5.csv` | 19,781 | Raw users batch |
-| `data/raw-source-files/users-chunks/chunk6.csv` | 4,149 | Raw users batch with schema drift |
-| `data/raw-source-files/users-chunks/chunk7.csv` | 4,149 | Raw users batch with schema drift |
-| `data/raw-source-files/users-chunks/chunk8.csv` | 4,149 | Raw users batch with schema drift |
-| `data/raw-source-files/users-chunks/chunk9.csv` | 4,149 | Raw users batch with schema drift |
-| `data/raw-source-files/users-chunks/chunk10.csv` | 4,147 | Raw users batch with schema drift |
+| `data/6M-0K-99K.users.dataset.public.csv` | 98,913 | Full raw users dataset |
+| `data/users.6M0xxK.2024.public.csv` | 20,743 | Source users sample used to create batches |
+| `data/Buyers-repartition-by-country.csv` | 62 | Raw buyer metrics by country |
+| `data/Comparison-of-Sellers-by-Gender-and-Country.csv` | 73 | Raw seller metrics by country and gender |
+| `data/Countries-with-Top-Sellers-(Fashion-C2C).csv` | 19 | Raw seller-market summary by country |
+| `data/chunk-data/chunk1.csv` | 19,783 | Raw users batch |
+| `data/chunk-data/chunk2.csv` | 19,783 | Raw users batch |
+| `data/chunk-data/chunk3.csv` | 19,783 | Raw users batch |
+| `data/chunk-data/chunk4.csv` | 19,783 | Raw users batch |
+| `data/chunk-data/chunk5.csv` | 19,781 | Raw users batch |
+| `data/chunk-data/chunk6.csv` | 4,149 | Raw users batch with schema drift |
+| `data/chunk-data/chunk7.csv` | 4,149 | Raw users batch with schema drift |
+| `data/chunk-data/chunk8.csv` | 4,149 | Raw users batch with schema drift |
+| `data/chunk-data/chunk9.csv` | 4,149 | Raw users batch with schema drift |
+| `data/chunk-data/chunk10.csv` | 4,147 | Raw users batch with schema drift |
+| `data/chunk-user-data.ipynb` | - | Notebook used to split user data into chunk files |
 
 ## Skills Demonstrated
 
@@ -166,21 +169,23 @@ The notebook also fills numeric nulls created by the outer join and performs row
 ecommerce-lakehouse-pipeline/
 ├── README.md
 ├── data/
-│   └── raw-source-files/
-│       ├── Buyers-repartition-by-country.csv
-│       ├── Comparison-of-Sellers-by-Gender-and-Country.csv
-│       ├── Countries-with-Top-Sellers-(Fashion-C2C).csv
-│       └── users-chunks/
-│           ├── chunk1.csv
-│           ├── chunk2.csv
-│           ├── chunk3.csv
-│           ├── chunk4.csv
-│           ├── chunk5.csv
-│           ├── chunk6.csv
-│           ├── chunk7.csv
-│           ├── chunk8.csv
-│           ├── chunk9.csv
-│           └── chunk10.csv
+│   ├── 6M-0K-99K.users.dataset.public.csv
+│   ├── Buyers-repartition-by-country.csv
+│   ├── Comparison-of-Sellers-by-Gender-and-Country.csv
+│   ├── Countries-with-Top-Sellers-(Fashion-C2C).csv
+│   ├── chunk-data/
+│   │   ├── chunk1.csv
+│   │   ├── chunk2.csv
+│   │   ├── chunk3.csv
+│   │   ├── chunk4.csv
+│   │   ├── chunk5.csv
+│   │   ├── chunk6.csv
+│   │   ├── chunk7.csv
+│   │   ├── chunk8.csv
+│   │   ├── chunk9.csv
+│   │   └── chunk10.csv
+│   ├── chunk-user-data.ipynb
+│   └── users.6M0xxK.2024.public.csv
 └── notebooks/
     ├── 01_Bronze_Layer_Unity_Catalog.py
     ├── 02_Silver_Layer_Unity_Catalog.py
